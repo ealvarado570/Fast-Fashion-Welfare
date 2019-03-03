@@ -1,0 +1,21 @@
+---
+title: "data_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(tsibble)
+library(devtools)
+devtools::install_github("tidyverts/fable")
+library(fable)
+```
+
+```{r, load data}
+ff_final <- readRDS("data/tidy/ff_final.RData")
+```
+
