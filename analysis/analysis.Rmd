@@ -1,6 +1,8 @@
 ---
 title: "data_analysis"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -11,11 +13,216 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(tsibble)
 library(devtools)
-devtools::install_github("tidyverts/fable")
+#devtools::install_github("tidyverts/fable")
 library(fable)
+library(mable)
+library(forecast)
+library(fasster)
+library(xts)
+#is this it?
+library(plm)
 ```
 
 ```{r, load data}
-ff_final <- readRDS("data/tidy/ff_final.RData")
+ff_final <- readRDS("C:/Users/mexic/Documents/R/Fast-Fashion-Welfare/data/tidy/ff_final.RData")
+```
+
+```{r set up data}
+#filter countries with less than 10 years of data
+tbl_country <- as.data.frame(table(ff_final$country))
+tbl_country <- filter(tbl_country, Freq > 9)
+
+country_names <- as.data.frame(tbl_country$Var1)
+
+ff_final <- ff_final %>%
+  select(year, trade_value_usd, total_trade, ff, country, gdp_c) %>%
+  filter(country %in% country_names$`tbl_country$Var1`)
+
+#make tsibble and make NAs explicit
+ff_final_tsb <- as_tsibble(ff_final, key = id(country), index = year)
+ff_final <- fill_gaps(ff_final, .full = TRUE)
+
+#cant find avg gdp_c for a country over all years
+ts_subset <- ff_final %>%
+  index_by() %>%
+  group_by(country) %>%
+  summarise(avg = mean(gdp_c))
+```
+
+```{r try model}
+#use augment to see fit, resid / tidy to see values
+#autoplot(ff_final)
+
+#test model for 5 countries
+zzz_5 <- ff_final %>%
+  index_by() %>%
+  filter(country %in% c("Bangladesh", "Canada", 
+                        "Cambodia", "Pakistan", "China")) %>%
+  model(m1 = TSLM(gdp_c ~ ff + country)) %>%
+  tidy
+
+#all countries
+zzz <- ff_final %>%
+  mutate(diff_gdp = difference(gdp_c, differences = 1)) %>%
+  filter(year > 1990) %>%
+  model(m1 = TSLM(diff_gdp ~ ff)) %>%
+  tidy
+#sumarrize models
+z1 <- zzz %>%
+  filter(term == "ff") %>%
+  summarise(beta = mean(estimate),
+            stdv = mean(std.error))
+
+
+#test lag
+lag <- diff_lag %>%
+  model(m1 = TSLM(diff1 ~ ff)) %>%
+  tidy
+  
+#------------------------------------
+#test for cambodia
+ff_final %>%
+  filter(country == "Cambodia") %>%
+  model(m1 = TSLM(gdp_c ~ ff)) %>%
+  tidy
+
+#see that countries input values
+c_na <- ff_final %>%
+  filter(country == "Cambodia")
+```
+
+```{r}
+#test random countries with NA
+ff_final %>%
+  filter(country == "Bangladesh") %>%
+  model(m1 = TSLM(gdp_c ~ ff)) %>%
+  tidy
+
+#see that countries values
+c_na <- ff_final %>%
+  filter(country == "Bangladesh")
+
+tourism %>%
+  update_tsibble(key = id()) %>%
+  model(m1 = TSLM(Trips ~ Quarter + Purpose)) %>%
+  tidy
+
+reprex - reproducible example
+```
+
+```{r}
+#explore what difference and lag do
+#it takes difference from last value in the chart, inlcuding from another country
+diff_lag <- ff_final %>%
+  mutate(lag1 = difference(gdp_c, lag = 1),
+         diff1 = difference(gdp_c, differences = 1)) %>%
+  filter(country %in% c("Bangladesh", "Australia",
+                        "Cambodia", "Pakistan", "China"),
+         year > 1990)
+
+#view lagged trend in gdp_c
+ggplot(diff_lag, aes(x = year, y = gdp_c, color = country)) +
+  geom_point()
+
+#view lagged
+
+autocorrelation
+```
+
+```{r try tibble}
+tib <- as_tibble(ff_final)
+
+mod <- tslm(gdp ~ trend*country, ...)
+
+mod <- tslm(gdp_c ~ ff + country, data = temp1)
+
+canada <- ff_final %>%
+  filter(country == "Canada")
+
+canada <- as_tibble(canada)
+canada <- as.data.frame(canada)
+
+canada$year <- as.ts(canada$year, start = 1990, end)
+
+cambodia <- ff_final %>%
+  filter(country == "Cambodia")
+
+rbind(canada, cambodia)
+```
+
+```{r PLM!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!}
+ff_final <- as.data.frame(ff_final)
+ff_final$country <- as.factor(ff_final$country)
+
+ff_plm <- pdata.frame(ff_final, index = c("country", "year"),
+                      drop.index = FALSE)
+
+#ff_plm <- filter(ff_plm, country %in% c("Canada", "Cambodia", 
+#                                        "Bangladesh", "Pakistan"))
+  
+ff_model <- plm(diff(gdp_c) ~ country + ff + total_trade, effect = "time",
+                model = "random", data = ff_plm, random.method = "walhus")
+
+###
+data("Gasoline", package = "plm")
+
+pelm <- pdata.frame(Gasoline, index = c("country", "year"), 
+                           drop.index = FALSE)
+
+testm <- plm(lgaspcar ~ country + lcarpcap, effect = "time",
+             model = "random", within = TRUE,
+             data = pelm)
+
+summary(testm)
+```
+
+```{r}
+testcor <- cortab(ff_plm, grouping = country)
+
+ff_bal <- make.pbalanced(ff_plm)
+
+ff_model <- plm(diff(gdp_c) ~ country + ff, effect = "time",
+                model = "random", data = ff_bal, random.method = "walhus")
+ff_model
+summary(ff_model)
+
+ff_m2 <- plm(diff(gdp_c) ~ country + ff + country * ff, effect = "time",
+                model = "random", data = ff_bal, random.method = "walhus")
+
+summary(ff_m2)
+
+ff_m3 <- plm((gdp_c) ~ country + ff + lag(gdp_c), effect = "time",
+                model = "random", data = ff_bal, random.method = "walhus")
+
+summary(ff_m3)
+
+ggplot(data = ff_bal, aes(year, ff)) +
+  geom_point(alpha = .2)
+
+ggplot(data = ff_bal, aes(year, gdp_c)) +
+  geom_point(alpha = .2)
+
+ff_bal_as <- filter(ff_bal, ff > 5)
+
+ggplot(data = ff_bal, aes(Apparel_Export_Share, (GDP_C))) +
+  geom_point(alpha = .2)
+
+anova(ff_model)
+```
+
+```{r}
+linear_model <- plm(gdp_c ~ trade_value_usd, data = ff_bal, 
+                    index = c("country", "year"), model = "pooling")
+
+summary(linear_model)
+
+apsrtable(linear_model)
+```
+
+```{r}
+ff_m3 <- plm((GDP_C) ~ Country + Apparel_Exports ,
+                model = "within", data = ff_bal)
+
+summary(ff_m3)
 ```
 

@@ -1,0 +1,161 @@
+---
+title: "Untitled"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stargazer)
+library(tidyverse)
+library(plm)
+library(tseries)
+library(xtable)
+library(car)
+```
+
+```{r load plm data}
+ff_final <- readRDS("C:/Users/mexic/Documents/R/Fast-Fashion-Welfare/data/tidy/ff_final.RData")
+
+ff_final <- ff_final %>%
+  select(year, trade_value_usd, total_trade, ff, country, gdp_c)
+
+names(ff_final) <- c("Year", "Apparel_Exports", "Total_Exports", "Apparel_Export_Share", "Country", "GDP_C")
+
+ff_plm <- pdata.frame(ff_final, index = c("Country", "Year"),
+                      drop.index = FALSE)
+
+ff_bal <- make.pbalanced(ff_plm)
+
+ff_bal <- ff_bal %>%
+  mutate(Apparel_Exports = Apparel_Exports/1000,
+         Total_Exports = Total_Exports/1000)
+```
+
+```{r make models}
+linear_model <- lm(log(GDP_C) ~ log(Apparel_Exports) + Country, data = ff_final)
+
+linear_model <- plm(log(GDP_C) ~ 
+                      log(Apparel_Exports) + Country, data = ff_bal, 
+                    index = c("Country", "Year"), model = "pooling")
+
+fixed_model <- plm(log(GDP_C) ~ 
+                      log(Apparel_Exports), data = ff_bal, 
+                    index = c("Country", "Year"), model = "within")
+
+tbl2 <- ff_bal %>%
+  group_by(Year) %>%
+  summarize('Average GDP_C, thousands 2010 USD' = mean(GDP_C, na.rm = TRUE),
+            'Average Apparel Exports, thousands 2010 USD' = mean(Apparel_Exports, na.rm = TRUE),
+            'Average Total Exports, thousands 2010 USD' = mean(Total_Exports, na.rm = TRUE),
+            'Average % Apparel Export Share' = mean(Apparel_Export_Share, na.rm = TRUE))
+```
+
+```{r, xtable.comment = FALSE}
+sum_tbl2 <- ff_bal %>%
+  group_by(Year) %>%
+  summarize('Average GDP_C, 2010 USD' = mean(GDP_C, na.rm = TRUE),
+            'Average Apparel Exports, thousands 2010 USD' = mean(Apparel_Exports, na.rm = TRUE),
+            'Average Total Exports, thousands 2010 USD' = mean(Total_Exports, na.rm = TRUE),
+            'Average % Apparel Export Share' = mean(Apparel_Export_Share, na.rm = TRUE))
+
+xt <- xtable(print(sum_tbl2), caption = c("test"))
+```
+
+```{r, results = "asis"}
+print(xt, caption.placement = "top", type = "latex", comment = FALSE, scalebox = 0.6)
+
+```
+
+
+```{r bp test, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(ff_bal, title = "Summary Statistics by Year")
+```
+
+```{r fixed effects model, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model, omit = "Country", title = "Model 1: One Way Individual Effects Model", report = c("vc*sp"))
+```
+
+```{r fixed effecbts model, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model, omit = "Country", title = "Augmented Dickey Fuller Test for Stationarity")
+```
+
+```{r hausman, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model, omit = "Country", title = "Hausman Test")
+```
+
+```{r hausmann test}
+random <- plm(log(GDP_C) ~ log(Apparel_Exports), data = ff_bal, index=c("Country", "Year"), model="random")
+
+phtest(fixed_model, random)
+```
+
+
+```{r}
+ff_bal2 <- ff_plm %>%
+  mutate(log_GDP_C = log(GDP_C))
+
+adf.test(ff_bal2$GDP_C, k = 2)
+```
+
+```{r model 2}
+fixed_model2 <- plm((GDP_C) ~ 
+                      Apparel_Export_Share, data = ff_bal, 
+                    index = c("Country", "Year"), model = "within")
+
+linear_model2 <- plm((GDP_C) ~ 
+                      (Apparel_Export_Share) + Country, data = ff_bal, 
+                    index = c("Country", "Year"), model = "pooling")
+```
+...
+...
+...
+
+```{r hausmann test2}
+random2 <- plm((GDP_C) ~ (Apparel_Export_Share), data = ff_bal, index=c("Country", "Year"), model="random")
+
+phtest(fixed_model2, random2)
+```
+
+```{r fixed effect model 2, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model2, omit = "Country", title = "Model 2: One Way Individual Effects Model for Apparel Export Share")
+```
+
+```{r hausman 2, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model2, omit = "Country", title = "Hausman Test for Model 2")
+```
+
+```{r}
+ff_final2 <- ff_final %>%
+  mutate(Apparel_Exports = Apparel_Exports/1000,
+         Total_Exports = Total_Exports/1000)
+
+sum_2 <- ff_final2 %>%
+  select(GDP_C, Apparel_Exports, Total_Exports, Apparel_Export_Share)
+
+summ_2 <- summary(sum_2)
+```
+
+```{r, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(sum_2, scalebox = .6, digits = 1, digits.extra = 3,  
+          omit.summary.stat = c("n", "p25", "p75"))
+```
+
+```{r}
+fixed_model3 <- plm(log(GDP_C) ~ 
+                      Apparel_Export_Share + log(Apparel_Exports), data = ff_bal, 
+                    index = c("Country", "Year"), model = "within")
+summary(fixed_model3)
+
+```
+
+```{r hausman 3, echo = FALSE, warning= FALSE, results = "asis"}
+stargazer(fixed_model3, omit = "Country", title = "Hausman Test for Model 2")
+```
+```
+
+```{r}
+cor.test(ff_final$Apparel_Exports, ff_final$Apparel_Export_Share)
+```
+

@@ -1,0 +1,25 @@
+---
+title: "latex formulas"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(apsrtable)
+library(stargazer)
+```
+
+$$
+I_i = \frac{A_i}{T_i}
+$$
+
+$$
+(1)\hspace{6cm} log(Y_{i,j}) = log(A_{i,j}) + \sum C_{i,j} + \epsilon
+$$
+$$
+(2)\hspace{6cm} Y_{i,j} = I_{i,j} + \sum C_{i,j} + \epsilon
+$$
+
+$$
+Y = \beta_0 + \beta_1A
+$$

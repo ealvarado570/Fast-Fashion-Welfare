@@ -1,0 +1,101 @@
+---
+title: "Untitled"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(pastecs)
+library(ggthemes)
+library(plm)
+library(gridExtra)
+```
+
+```{r, eval = FALSE}
+summary <- ff_final %>%
+  mutate(Country = country,
+         'GDP per capita' = gdp_c,
+         'Apparel Exports (thousands 2010 USD)' = trade_value_usd / 1000,
+         'Total Exports (thousands 2010 USD)' = total_trade / 1000,
+         'Apparel Intensity (% exports Apparel)' = ff) %>%
+  summarise('Average Number of Years per Country' = n() / 129,
+            'Mean of GDP per capita (thousands 2010 USD)' = mean(gdp_c),
+            'Standard Deviation of GDP per capita (thousands 2010 USD)' 
+            = sd(gdp_c),
+            )
+
+
+china <- ff_final %>%
+  filter(country == "China")
+
+test_sum <- stat.desc(ff_final)
+```
+
+$$
+I_i = \frac{A_i}{T_i}
+$$
+```{r load stuff}
+ff_final <- readRDS("C:/Users/mexic/Documents/R/Fast-Fashion-Welfare/data/tidy/ff_final.RData")
+
+ff_final <- ff_final %>%
+  select(year, trade_value_usd, total_trade, ff, country, gdp_c)
+
+data_viz <- ff_final %>%
+    filter(Country %in% c("China", "Cambodia", "Bangladesh", 
+                        "Pakistan", "Malaysia"))
+```
+
+
+```{r, create viz, fig.cap = "Figure 1: Examining GDP per capita trends for a subset of countries: Log of GDP per capita across years in the sample for the selected subset of countries. Countries are denoted by color and the dashed line indicates the start of the pahsing out of the Multi-Fibre Arrangement."}
+
+ggplot(data_viz, aes(x = year, y = `Log GDP per Capita`, 
+                     color = Country)) +
+  geom_point() +
+  geom_line() +
+  geom_vline(xintercept = 2004, linetype = "dashed") + 
+  geom_text(aes(x = 2009.5, label = "Multi-fibre Arrangement Expires", y = 7.5),
+            size = 3,
+            color = "black") +
+  theme_bw() +
+  scale_color_gdocs() +
+  xlab("Year") +
+  ylab("Log GDP per Capita (thousands 2010 USD)")
+
+```
+
+```{r}
+Developing_Countries <- ggplot(data_viz, aes(x = Apparel_Export_Share, y = GDP_C, color = Country)) +
+  geom_point()
+```
+
+```{r}
+data_viz2 <- ff_final %>%
+  filter(Country %in% c("United Kingdom", "Canada", "Germany", 
+                        "Japan", "South Korea"))
+
+Developed_Countries <- ggplot(data_viz2, aes(Apparel_Export_Share, GDP_C, color = Country)) +
+  geom_point()
+```
+
+```{r side by side}
+grid.arrange(Developing_Countries, Developed_Countries, ncol = 2)
+```
+
+```{r}
+len <- ff_final %>%
+  group_by(Country) %>%
+  summarize(length(Year))
+
+mean(len$`length(Year)`)
+
+sum_tbl2 <- ff_bal %>%
+  group_by(Year) %>%
+  summarize('Average GDP_C, thousands 2010 USD' = mean(GDP_C, na.rm = TRUE),
+            'Average Apparel Exports, thousands 2010 USD' = mean(Apparel_Exports, na.rm = TRUE),
+            'Average Total Exports, thousands 2010 USD' = mean(Total_Exports, na.rm = TRUE),
+            'Average % Apparel Export Share' = mean(Apparel_Export_Share, na.rm = TRUE))
+```
+
