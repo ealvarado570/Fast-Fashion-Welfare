@@ -1,0 +1,356 @@
+---
+title: "Untitled"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(plm)
+library(wbstats)
+library(ggthemes)
+library(gridExtra)
+```
+
+```{r load data}
+#load data
+ff_final_low <- readRDS("data/final/ff_final_low.RData")
+
+ff_final_all <- readRDS("data/final/ff_final_all.RData")
+```
+
+```{r summary stats}
+#save names
+low_names <- unique(ff_final_low$Country)
+
+ff_viz <- ff_final_low %>%
+  mutate(Period = if_else(Year < 2000, "90s", "Post"),
+         Period = if_else(Year < 2010 & Year > 1999, "2000s", Period),
+         Period = if_else(Year < 2015 & Year > 2009, "2010-2015", Period))
+
+ggplot(ff_viz, aes(Apparel_Exports, color = Period)) +
+  geom_density() +
+  coord_cartesian(xlim=c(0, 20000), ylim = c(0, .001)) +
+  theme_igray()
+
+#for all
+ff_viz_all <- ff_final_all %>%
+  mutate(Period = if_else(Year < 2000, "90s", "Post"),
+         Period = if_else(Year < 2010 & Year > 1999, "2000s", Period),
+         Period = if_else(Year < 2015 & Year > 2009, "2010-2015", Period)) %>%
+  mutate(Income_Level = if_else(Country %in% low_names, 
+                                "Developing", "Non-Developing"))
+
+#Final Viz for Export Share
+ggplot(ff_viz_all, aes(Apparel_Exports, color = Period)) +
+  geom_density(alpha = .5, size = 1.07) +
+  coord_cartesian(xlim=c(0, 20000), ylim = c(0, .001)) +
+  facet_wrap(.~Income_Level) +
+  theme_bw() +
+  xlab("Apparel Exports (Millions USD)") +
+  scale_color_fivethirtyeight() +
+  theme(legend.text = element_text(size = 14),
+        legend.title = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        strip.text = element_text(size = 14),
+        axis.title.y = element_blank())
+
+```
+
+```{r Apparel Export Share vs time}
+ggplot(ff_viz_all, aes(x = Year, y = Apparel_Export_Share, color = Income_Level)) +
+  geom_point(alpha = 0) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_bw() + 
+  scale_color_fivethirtyeight() +
+  geom_jitter(width = .25, alpha = .5, size = 3, height = 0) +
+  ylab("Apparel Share of Total Exports (%)") +
+  theme(legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 18),
+        legend.text = element_text(size = 14))
+
+
+```
+
+```{r}
+ggplot(ff_viz_all, aes(x = Year, y = GDP_C_Growth_Rate, color = Income_Level)) +
+  geom_point(alpha = 0, size = 1.4) +
+  geom_jitter(width = .20, alpha = .3, size = 1.3, height = 0) +
+  theme_bw() +
+  scale_color_fivethirtyeight() +
+  geom_smooth(method = "loess", se = FALSE, size = 1.7) +
+  coord_cartesian(ylim = c(-15, 15)) + 
+  geom_vline(xintercept = 2008, linetype = "dashed") +
+  geom_text(aes(x = 2010, y = 14.5, label = "Great Recession"), 
+            color = "black", size = 5) +
+  ylab("GDP per Capita Growth Rate (%)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18),
+        axis.text.x = element_text(size = 15),
+        legend.text = element_text(size = 14),
+        legend.title = element_blank(),
+        axis.text.y = element_text(size = 13))
+```
+
+```{r}
+ff_viz_all1 <- ff_viz_all %>%
+  mutate(GDP = GDP/100000000)
+
+ggplot(ff_viz_all1, aes(x = GDP, y = GDP_C, color = Income_Level)) +
+  geom_point(alpha = .7, size = 1.4)
+
+
+ggplot(ff_viz, aes(x = GDP, y = GDP_C)) +
+  geom_point(alpha = .7, size = 1.4)
+
+#reorder factor levels
+ff_viz_all$Period <- factor(ff_viz_all$Period, 
+                               levels = c("90s", "2000s", "2010-2015"))
+
+#final boxplot
+ff_viz_all %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(Income_Level, GDP_C)) +
+  geom_boxplot() +
+  facet_wrap(.~Period) +
+  theme_bw() +
+  ylab("GDP Per Capita (2010 USD)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 22),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 13),
+        strip.text = element_text(size = 16)) +
+  scale_y_continuous(breaks = seq(0, 6000, 1000))
+
+#find medians for above
+find_median <- ff_viz_all %>%
+  filter(Income_Level == "Developing") %>%
+  group_by(Period) %>%
+  mutate(med = median(GDP_C))
+rm(find_median)
+
+#final boxplot for all
+#final boxplot
+ff_viz_all %>%
+  ggplot(aes(Income_Level, GDP_C)) +
+  geom_boxplot() +
+  theme_bw() +
+  ylab("GDP Per Capita (2010 USD)") +
+  theme(axis.title.y = element_text(size = 22),
+        axis.text.y = element_text(size = 13),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 16),
+        strip.text = element_text(size = 16))
+```
+
+```{r}
+ex_share <- ff_viz %>%
+  group_by(Country) %>%
+  summarise(range1 = range(Apparel_Export_Share)[1],
+            range2 = range(Apparel_Export_Share)[2])
+
+ex_share <- ex_share %>%
+  mutate(range = range2 - range1)
+
+ex_share_2 <- ff_viz %>%
+  filter(!Country %in% c("Bhutan", "Haiti", "Myanmar", "Sierra Leone")) %>%
+  group_by(Country) %>%
+  summarize(mean(Apparel_Export_Share))
+
+#Bhutan, Haiti, Myanmar, Sierra Leone need to be taken out of set
+low_years <- ff_viz %>%
+  group_by(Country) %>%
+  tally() %>%
+  filter(n < 10)
+
+med_gdpc <- ff_viz %>%
+  filter(!Country %in% c("Bhutan", "Haiti", "Myanmar", "Sierra Leone")) %>%
+  group_by(Country) %>%
+  summarise(avg = mean(GDP_C))
+#Cambodia is median / Benin
+
+
+#median country for average export share is Honduras
+#highest country on avg for export share is Bangldesh
+ff_bangladesh <- ff_viz_all %>%
+  filter(Country == "Bangladesh") %>%
+  mutate(new_country = "Bangladesh")
+
+#final app ex share graph
+ff_viz_all %>%
+  filter(Income_Level == "Developing",
+         Country != "Bangladesh") %>%
+  ggplot(aes(Year, Apparel_Export_Share)) +
+  geom_point(alpha = 0) +
+  geom_jitter(width = .20, alpha = .3, size = 2, height = 0) +
+  geom_point(data = ff_bangladesh, aes(Year, Apparel_Export_Share, 
+                                       color = new_country), size = 2) +
+  geom_line(data = ff_bangladesh, color = "red") +
+  theme_bw() +
+  ylab("Apparel Share of Total Exports (%)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14))
+```
+
+```{r}
+ff_viz_all %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(x = Income_Level, y = Apparel_Exports)) +
+  geom_hline(yintercept = median(ff_viz$Apparel_Exports))
+
+ff_china <- ff_viz_all %>%
+  filter(Country == "China")
+
+ff_viz_all %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(Year, Apparel_Exports)) +
+  geom_point() +
+  geom_point(data = ff_china, aes(Year, Apparel_Exports), color = "red")
+
+
+```
+
+```{r}
+test_ff <- ff_viz_all %>%
+  filter(!Country %in% c("Bhutan", "Haiti", "Myanmar", "Sierra Leone"))
+  
+ff_plm <- pdata.frame(test_ff, index = c("Country", "Year"),
+                      drop.index = FALSE)
+
+ff_plm <- make.pbalanced(ff_plm)
+
+ff_plm$lag_a_e <- lag(ff_plm$Apparel_Exports, k =1)
+
+ff_plm$diff_a_e <- diff(ff_plm$Apparel_Exports, lag = 1)
+
+ff_plm_df <- as.data.frame(ff_plm)
+
+ff_china_plm <- ff_plm_df %>%
+  filter(Country == "China")
+
+ff_bangladesh_plm <- ff_plm_df %>%
+  filter(Country == "Bangladesh")
+
+#final graphic with China change in apparel Exports
+ff_plm_df %>%
+  filter(Income_Level == "Developing",
+         Country != "China") %>%
+  ggplot(aes(Year, diff_a_e, size = GDP)) +
+  geom_jitter(width = .20, alpha = .4, height = 0) +
+  geom_point(data = ff_china_plm, aes(Year, diff_a_e, size = GDP), 
+             color = "red", alpha = .4) +
+  theme_bw() +
+  ylab("Change in Apparel Exports (Millions 2010 USD)") +
+  theme(axis.title.x = element_blank()) +
+  geom_text(aes(x = 13, y = 12000, label = "China"), 
+            color = "red", size = 6)
+
+#final graphic without China/bang change in apparel exports
+ff_plm_df %>%
+  filter(Income_Level == "Developing",
+         !Country %in% c("China", "Bangladesh")) %>%
+  ggplot(aes(Year, diff_a_e, size = GDP/100000000)) +
+  geom_point(data = ff_bangladesh_plm, aes(Year, diff_a_e, size = GDP/100000000), 
+             color = "red") +
+  geom_jitter(width = .0, alpha = .4, height = 0) +
+  theme_bw() +
+  ylab("Change in Apparel Exports (Millions 2010 USD)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13)) +
+  labs(size = "GDP (100M USD)")
+
+#without china
+ff_plm_df %>%
+  filter(Income_Level == "Developing",
+         !Country %in% c("China")) %>%
+  ggplot(aes(Year, diff_a_e, size = GDP/100000000)) +
+  geom_jitter(width = .0, alpha = .4, height = 0) +
+  theme_bw() +
+  ylab("Change in Apparel Exports (Millions 2010 USD)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13)) +
+  labs(size = "GDP (100M USD)")
+
+#without china, gdp_c
+ff_plm_df %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(Year, diff_a_e, size = GDP_C)) +
+  geom_jitter(width = .0, alpha = .4, height = 0) +
+  theme_bw() +
+  ylab("Change in Apparel Exports (Millions 2010 USD)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13)) +
+  labs(size = "GDP per Capita (2010 USD)")
+
+#test sabout percent change in apparel exports
+ff_plm_df <- ff_plm_df %>%
+  mutate(percent_dif_a_e = ifelse(is.na(diff_a_e), NA, (diff_a_e/ lag_a_e)))
+# burundi 2009 - https://www.securitycouncilreport.org/chronology/burundi.php?page=5
+#madagascar 2000 - https://en.wikipedia.org/wiki/Economy_of_Madagascar
+
+
+percent_aed_points <- ff_plm_df %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(Year, percent_dif_a_e, size = GDP_C)) +
+  geom_jitter(width = .0, alpha = .4, height = 0) +
+  theme_bw() +
+  ylab("% Change in Apparel Exports (Millions 2010 USD)") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13),
+        legend.position = "bottom") +
+  labs(size = "GDP per Capita (2010 USD)") +
+  coord_cartesian(ylim = c(-5, 30)) +
+  scale_x_discrete(labels = seq(1990, 2015, 5), breaks = seq(1990, 2015, 5))
+
+#density
+percent_aed_density <- ff_plm_df %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(percent_dif_a_e)) +
+  geom_density(fill = "red", alpha = .5) +
+  coord_cartesian(xlim = c(0, 30)) +
+  theme_bw() +
+  xlab("% Change in Apparel Exports") +
+  theme(axis.title.x = element_text(size = 18),
+        axis.title.y = element_text(size = 10),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13))
+
+#grid arrange % change AE
+grid.arrange(percent_aed_points, percent_aed_density, nrow = 1, ncol = 2)
+
+```
+
+```{r look at change in apparel share %}
+ff_plm$diff_a_e_s <- diff(ff_plm$Apparel_Export_Share, lag = 1)
+
+ff_plm_df1 <- as.data.frame(ff_plm)
+
+#change is app export share
+ff_plm_df1 %>%
+  filter(Income_Level == "Developing") %>%
+  ggplot(aes(Year, diff_a_e_s, size = GDP_C)) +
+  geom_jitter(width = .0, alpha = .4, height = 0) +
+  theme_bw() +
+  ylab("Change in Apparel Export Share Percentage") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 12),
+        legend.title = element_text(size = 13)) +
+  labs(size = "GDP per Capita (2010 USD)")
+
+```
+

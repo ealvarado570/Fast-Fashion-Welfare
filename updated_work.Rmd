@@ -1,0 +1,189 @@
+---
+title: "updated_work"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plm)
+library(wbstats)
+```
+
+```{r load 62}
+class_62 <- readRDS("C:/Users/mexic/Documents/R/Fast-Fashion-Welfare/data/tidy/62_trade.RData")
+
+class_62 <- class_62 %>%
+  filter(commodity_code == 62)
+
+class_62 <- class_62 %>%
+  filter(commodity_code == 62) %>%
+  mutate(country = reporter,
+         trade_value_usd62 = trade_value_usd) %>%
+  select(year, trade_value_usd62, country)
+```
+
+```{r set up both}
+ff_final <- readRDS("C:/Users/mexic/Documents/R/Fast-Fashion-Welfare/data/tidy/ff_final.RData")
+
+ff_final <- ff_final %>%
+  select(year, trade_value_usd, total_trade, ff, country, gdp_c)
+
+#join with 62 and update
+ff_final <- full_join(ff_final, class_62, by = c("year", "country"))
+
+ff_final <- drop_na(ff_final)
+
+ff_final <- ff_final %>%
+  mutate(Apparel_Exports = trade_value_usd62 + trade_value_usd,
+         Total_Exports = total_trade,
+         Apparel_Export_Share = 100*Apparel_Exports/Total_Exports) %>%
+  select(year, country, Apparel_Exports, Total_Exports, gdp_c, 
+         Apparel_Export_Share)
+
+#rename variable
+names(ff_final) <- c("Year", "Country", "Apparel_Exports", "Total_Exports",
+                     "GDP_C", "Apparel_Export_Share")
+
+```
+
+```{r worldbank gdp}
+gdp_vars <- wbsearch(pattern = "gdp")
+
+#GDP_C in PPP - NY.GDP.PCAP.PP.CD
+#GDP_C in 2010 USD is what I have
+#GDP_C growth - NY.GDP.PCAP.KD.ZG
+#GDP in 2010 USD - NY.GDP.MKTP.KD
+
+wb_new <- wb(indicator = c("NY.GDP.PCAP.KD.ZG", 
+                           "NY.GDP.MKTP.KD", "NY.GDP.PCAP.KD"),
+               startdate = 1990, enddate = 2014,
+               return_wide = TRUE,
+               POSIXct = TRUE, freq = "Y")
+
+wb_new <- wb_new %>%
+  mutate(GDP_C_Growth_Rate = NY.GDP.PCAP.KD.ZG,
+         GDP_C = NY.GDP.PCAP.KD,
+         GDP = NY.GDP.MKTP.KD,
+         Year = as.numeric(date),
+         Country = country) %>%
+  select(GDP_C_Growth_Rate, GDP, Year, Country, GDP_C)
+```
+
+```{r add usa and vietnam}
+#load 61_62
+usa_viet_61_62 <- readRDS("data/tidy/exp_61_62.RData")
+
+#filter usa vietnam
+usa_viet_61_62 <- usa_viet_61_62 %>%
+  filter(reporter %in% c("USA", "Viet Nam")) %>%
+  mutate(Country = if_else(reporter == "USA", "United States", "Vietnam"))
+
+#61
+usa_viet_61 <- usa_viet_61_62 %>%
+  filter(commodity_code == 61)
+
+#62
+usa_viet_62 <- usa_viet_61_62 %>%
+  filter(commodity_code == 62)
+
+#join 61 and 62
+usa_viet <- full_join(usa_viet_61, usa_viet_62, by = c("Country", "year"))
+
+usa_viet <- usa_viet %>%
+  mutate(Apparel_Exports = trade_value_usd.x + trade_value_usd.y,
+         Year = year) %>%
+  select(Year, Country, Apparel_Exports)
+
+#tot usa viet
+usa_viet_tot <- readRDS("data/tidy/tot_exp.RData")
+
+usa_viet_tot <- usa_viet_tot %>%
+  filter(reporter %in% c("USA", "Viet Nam")) %>%
+  mutate(Country = if_else(reporter == "USA", "United States", "Vietnam")) %>%
+  mutate(Year = year,
+         Total_Exports = total_trade) %>%
+  select(Year, Country, Total_Exports)
+
+usa_viet_final <- left_join(usa_viet, usa_viet_tot, by = c("Year", "Country"))
+
+#list of countries
+prev_countries <- unique(ff_final$Country)
+
+ff_final_1 <- ff_final %>%
+  select(Year, Country, Apparel_Exports, Total_Exports)
+
+ff_final_1 <- rbind(ff_final_1, usa_viet_final)
+
+
+#add gdpc stuff
+ff_final_wb <- inner_join(ff_final_1, wb_new, by = c("Year", "Country"))
+
+#scale it
+ff_final_wb1 <- ff_final_wb %>%
+  mutate(Apparel_Exports = Apparel_Exports/1000000,
+         Total_Exports = Total_Exports/1000000,
+         Apparel_Export_Share = 100*Apparel_Exports/Total_Exports)
+```
+
+
+```{r low income dataset}
+ff_final_low <- ff_final_wb1 %>%
+  filter(Country %in% c("Afghanistan", "Bangladesh", "Benin", "Bhutan", 
+                     "Burkina Faso", "Burundi", "Cambodia",
+                     "Central African Republican", "Chad", "China",
+                     "Comoros", "Congo, Dem. Rep.", "Egypt",
+                     "Ethiopia", "Gambia", "Guinea", "Guyana",
+                     "Haiti", "Honduras", "India", "Indonesia",
+                     "Kenya", "Laos", "Lesotho", "Liberia", "Madagascar",
+                     "Malawi", "Maldives", "Mali", "Mauritania",
+                     "Mozambique", "Myanmar", "Nepal", "Niger",
+                     "Nigeria", "Pakistan", "Rwanda", 
+                     "São Tomé and Principe", "Sierra Leone", "Solomon Islands",
+                     "Somalia", "Sri Lanka", "Sudan", "Tanzania",
+                     "Togo", "Uganda", "Vietnam", "Zambia"))
+#all dataset
+ff_final_all <- ff_final_wb1
+
+#save datasets
+saveRDS(ff_final_low, file = "data/final/ff_final_low.RData")
+saveRDS(ff_final_all, file = "data/final/ff_final_all.RData")
+```
+
+```{r graph for low income}
+ggplot(ff_final_low, aes(Apparel_Exports)) +
+  geom_density()
+```
+
+
+```{r make plm dataset}
+ff_plm <- pdata.frame(ff_final, index = c("Country", "Year"),
+                      drop.index = FALSE)
+
+ff_bal <- make.pbalanced(ff_plm)
+```
+
+
+```{r add PPP GDP, NOT DONE YET}
+#GDP_C in PPP - NY.GDP.PCAP.PP.CD
+#GDP_C in 2010 USD is what I have
+#GDP_C growth - NY.GDP.PCAP.KD.ZG
+#GDP in 2010 USD - NY.GDP.MKTP.KD
+
+wb_new <- wb(indicator = c("NY.GDP.PCAP.KD.ZG", 
+                           "NY.GDP.MKTP.KD", "NY.GDP.PCAP.KD"),
+               startdate = 1990, enddate = 2014,
+               return_wide = TRUE,
+               POSIXct = TRUE, freq = "Y")
+
+wb_new <- wb_new %>%
+  mutate(GDP_C_Growth_Rate = NY.GDP.PCAP.KD.ZG,
+         GDP_C = NY.GDP.PCAP.KD,
+         GDP = NY.GDP.MKTP.KD,
+         Year = as.numeric(date),
+         Country = country) %>%
+  select(GDP_C_Growth_Rate, GDP, Year, Country, GDP_C)
+```
+

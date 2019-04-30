@@ -1,0 +1,25 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r set up data}
+low_years <- ff_viz_all %>%
+  group_by(Country) %>%
+  tally() %>%
+  filter(n < 10)
+
+low_countries_all <- low_years$Country
+
+ff_plm_final <- ff_plm_df %>%
+  filter(!Country %in% low_countries_all)
+
+ff_plm_final <- pdata.frame(ff_plm_final, index = c("Country", "Year"),
+                      drop.index = FALSE)
+
+```
+
